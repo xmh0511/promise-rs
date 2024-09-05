@@ -1,14 +1,17 @@
 use std::{
-    cell::UnsafeCell, io::Read, marker::PhantomData, sync::{
+    cell::UnsafeCell,
+    io::Read,
+    marker::PhantomData,
+    sync::{
         atomic::{AtomicI32, AtomicU8, Ordering},
         mpsc::{channel, Receiver, Sender},
         Arc,
-    }
+    },
 };
 const PENDING: u8 = 0;
 const FILL: u8 = 1;
 const READY: u8 = 2;
-const REJECT:u8 = 3;
+const REJECT: u8 = 3;
 const FINISH: u8 = 4;
 struct Cell<T> {
     val: UnsafeCell<Option<T>>,
@@ -68,9 +71,9 @@ impl<Arg, Ret> Rs<Arg, Ret> {
             }
         }
     }
-	fn reject(&self,_:PhantomData<Arg>){
-		self.0.store(REJECT, Ordering::Relaxed);
-	}
+    fn reject(&self, _: PhantomData<Arg>) {
+        self.0.store(REJECT, Ordering::Relaxed);
+    }
     fn invoke(&self) -> Ret {
         let v = self.1.take().unwrap();
         (*(*self.2).as_ref().unwrap())(v)
@@ -106,7 +109,7 @@ impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
         let v = self.value.take().unwrap();
         (*(*self.call_back).as_ref().unwrap())(v)
     }
-    fn then<D : Send + 'static, F: Fn(Arg) -> Ret + Send + Sync + 'static>(
+    fn then<D: Send + 'static, F: Fn(Arg) -> Ret + Send + Sync + 'static>(
         self,
         f: F,
     ) -> Promise<Ret, D> {
@@ -122,8 +125,8 @@ impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
                 match rx.recv() {
                     Ok(v) => rs.resolve(v),
                     Err(_) => {
-						//reject
-					},
+                        //reject
+                    }
                 };
             });
         }
@@ -137,9 +140,9 @@ impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
                 Promise::new(move |rs| rs.resolve(r))
             }
             Err(v) => {
-				if v == REJECT{
-					return Promise::new(move |_| {});
-				}
+                if v == REJECT {
+                    return Promise::new(move |_| {});
+                }
                 unreachable!();
             }
         }
@@ -159,16 +162,16 @@ fn main() {
         .then(move |v| {
             count.fetch_add(1, Ordering::Relaxed);
             println!("v == {v}");
-			//std::thread::sleep(std::time::Duration::from_secs(1));
-			Promise::new(move |rs|{
-				rs.resolve(v+1)
-				//rs.reject(PhantomData::<i32>::default());
-			})
+            //std::thread::sleep(std::time::Duration::from_secs(1));
+            Promise::new(move |rs| {
+                rs.resolve(v + 1)
+                //rs.reject(PhantomData::<i32>::default());
+            })
         })
         .then(|v| {
-			let _:Promise<(), ()> = v.then(|v2|{
-				println!("v2 == {v2}");
-			});
+            let _: Promise<(), ()> = v.then(|v2| {
+                println!("v2 == {v2}");
+            });
         });
     }
     let mut buf = [0u8; 1];

@@ -135,17 +135,23 @@ impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
         {
             Ok(_v) => {
                 //println!("invoke by then");
-                let r = self.invoke();
-                Promise::new(move |rs| rs.resolve(r))
+                Promise::new(move |rs| {
+                    let r = self.invoke();
+                    rs.resolve(r)
+                })
             }
             Err(v) => {
                 if v == REJECT {
                     return Promise::new(move |_| {});
                 }
-				if v == FINISH{
-					panic!("the promise has been exhausted, complete promise cannot be executed again");
-				}
-                unreachable!("Change READY to FINISH in `then` cannot have other cases except REJECT");
+                if v == FINISH {
+                    panic!(
+                        "the promise has been exhausted, complete promise cannot be executed again"
+                    );
+                }
+                unreachable!(
+                    "Change READY to FINISH in `then` cannot have other cases except REJECT"
+                );
             }
         }
     }

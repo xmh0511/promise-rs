@@ -1,4 +1,10 @@
-use std::{io::Read, sync::{atomic::{AtomicI32, Ordering}, Arc}};
+use std::{
+    io::Read,
+    sync::{
+        atomic::{AtomicI32, Ordering},
+        Arc,
+    },
+};
 
 use promise_rs::Promise;
 
@@ -14,7 +20,7 @@ fn main() {
             count.fetch_add(1, Ordering::Relaxed);
             println!("v == {v}");
             Promise::new(move |rs| {
-				//std::thread::sleep(std::time::Duration::from_secs(1));
+                //std::thread::sleep(std::time::Duration::from_secs(1));
                 rs.resolve(v + 1)
                 //rs.reject(PhantomData::<i32>::default());
             })

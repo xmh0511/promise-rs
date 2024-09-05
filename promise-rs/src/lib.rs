@@ -1,18 +1,17 @@
 use std::{
     cell::UnsafeCell,
-    io::Read,
     marker::PhantomData,
     sync::{
-        atomic::{AtomicI32, AtomicU8, Ordering},
+        atomic::{AtomicU8, Ordering},
         mpsc::{channel, Receiver, Sender},
         Arc,
     },
 };
-const PENDING: u8 = 0;
-const FILL: u8 = 1;
-const READY: u8 = 2;
-const REJECT: u8 = 3;
-const FINISH: u8 = 4;
+pub const PENDING: u8 = 0;
+pub const FILL: u8 = 1;
+pub const READY: u8 = 2;
+pub const REJECT: u8 = 3;
+pub const FINISH: u8 = 4;
 struct Cell<T> {
     val: UnsafeCell<Option<T>>,
 }
@@ -40,7 +39,7 @@ impl<T> Cell<T> {
 unsafe impl<T> Send for Cell<T> {}
 unsafe impl<T> Sync for Cell<T> {}
 
-struct Rs<Arg, Ret>(
+pub struct Rs<Arg, Ret>(
     Arc<AtomicU8>,
     Arc<Cell<Arg>>,
     Arc<Cell<Box<dyn Fn(Arg) -> Ret + Send + 'static>>>,
@@ -48,7 +47,7 @@ struct Rs<Arg, Ret>(
 );
 
 impl<Arg, Ret> Rs<Arg, Ret> {
-    fn resolve(&self, v: Arg) {
+    pub fn resolve(&self, v: Arg) {
         self.1.set(v);
         if self
             .0
@@ -71,7 +70,7 @@ impl<Arg, Ret> Rs<Arg, Ret> {
             }
         }
     }
-    fn reject(&self, _: PhantomData<Arg>) {
+    pub fn reject(&self, _: PhantomData<Arg>) {
         self.0.store(REJECT, Ordering::Relaxed);
     }
     fn invoke(&self) -> Ret {
@@ -79,14 +78,14 @@ impl<Arg, Ret> Rs<Arg, Ret> {
         (*(*self.2).as_ref().unwrap())(v)
     }
 }
-struct Promise<Arg, Ret> {
+pub struct Promise<Arg, Ret> {
     status: Arc<AtomicU8>,
     value: Arc<Cell<Arg>>,
     call_back: Arc<Cell<Box<dyn Fn(Arg) -> Ret + Send + 'static>>>,
     recv: Receiver<Ret>,
 }
 impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
-    fn new<F: FnOnce(Rs<Arg, Ret>) + 'static + Send>(f: F) -> Self {
+    pub fn new<F: FnOnce(Rs<Arg, Ret>) + 'static + Send>(f: F) -> Self {
         let status = Arc::new(AtomicU8::new(0));
         let status_cp = status.clone();
         let value = Arc::new(Cell::new());
@@ -109,7 +108,7 @@ impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
         let v = self.value.take().unwrap();
         (*(*self.call_back).as_ref().unwrap())(v)
     }
-    fn then<D: Send + 'static, F: Fn(Arg) -> Ret + Send + Sync + 'static>(
+    pub fn then<D: Send + 'static, F: Fn(Arg) -> Ret + Send + Sync + 'static>(
         self,
         f: F,
     ) -> Promise<Ret, D> {
@@ -143,38 +142,11 @@ impl<Arg: Send + 'static, Ret: Send + 'static> Promise<Arg, Ret> {
                 if v == REJECT {
                     return Promise::new(move |_| {});
                 }
-                unreachable!();
+				if v == FINISH{
+					panic!("the promise has been exhausted, complete promise cannot be executed again");
+				}
+                unreachable!("Change READY to FINISH in `then` cannot have other cases except REJECT");
             }
         }
     }
-}
-
-fn main() {
-    let count = Arc::new(AtomicI32::new(0));
-    let look_count = count.clone();
-    for _ in 0..10 {
-        let count = count.clone();
-        let _c: Promise<_, ()> = Promise::new(|rs| {
-            //std::thread::sleep(std::time::Duration::from_secs(1));
-            //std::thread::sleep(std::time::Duration::from_millis(50));
-            rs.resolve(1);
-        })
-        .then(move |v| {
-            count.fetch_add(1, Ordering::Relaxed);
-            println!("v == {v}");
-            //std::thread::sleep(std::time::Duration::from_secs(1));
-            Promise::new(move |rs| {
-                rs.resolve(v + 1)
-                //rs.reject(PhantomData::<i32>::default());
-            })
-        })
-        .then(|v| {
-            let _: Promise<(), ()> = v.then(|v2| {
-                println!("v2 == {v2}");
-            });
-        });
-    }
-    let mut buf = [0u8; 1];
-    std::io::stdin().read(&mut buf[..]).unwrap();
-    println!("total  = {}", look_count.load(Ordering::Relaxed));
 }
